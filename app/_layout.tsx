@@ -1,24 +1,23 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+// Importante: Importe o Provider que criamos
+import { GameProvider } from '@/contexts/GameContext';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
+    <ThemeProvider value={DarkTheme}>
+      {/* O GameProvider precisa abraçar a Stack para que todas as telas acessem o socket */}
+      <GameProvider>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="arena" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="victory" options={{ headerShown: false, gestureEnabled: false }} />
+        </Stack>
+        <StatusBar style="light" />
+      </GameProvider>
     </ThemeProvider>
   );
 }
