@@ -1,74 +1,107 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, TextInput } from 'react-native';
 import { useGame } from '@/contexts/GameContext';
-import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function ArenaScreen() {
   const { gameState, player, attack, resolveIncident, isConnected } = useGame();
   const router = useRouter();
   
-  // Animações
   const animatedHP = useRef(new Animated.Value(1)).current;
+  const animatedSquadHP = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  
+  const squadProgressAnim = useRef(new Animated.Value(0)).current;
+  const [squadTimeLeft, setSquadTimeLeft] = useState(5);
 
-  // Estados locais para os mini-games de incidentes
   const [clickCount, setClicks] = useState(0);
   const [sequence, setSequence] = useState<string[]>([]);
   const [puzzleAnswer, setPuzzleAnswer] = useState('');
 
-  // Efeito 1: Navegação para a Vitória
+  const activeIncident = gameState?.active_incident;
+  const isMyIncident = activeIncident?.target_class === player.class;
+
   useEffect(() => {
     if (gameState?.status === 'victory') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/victory');
+    } else if (gameState?.status === 'defeat') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      alert('⚠️ SQUAD DERROTADO! A infraestrutura colapsou.');
+      router.replace('/'); 
     }
   }, [gameState?.status]);
 
-  // Efeito 2: Reatividade ao Dano (Animação de HP e Screenshake)
   useEffect(() => {
     if (gameState?.current_boss) {
       const hpPercent = Math.max(0, gameState.boss_hp / gameState.current_boss.max_hp);
-      
-      Animated.timing(animatedHP, {
-        toValue: hpPercent,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
+      Animated.timing(animatedHP, { toValue: hpPercent, duration: 300, useNativeDriver: false }).start();
 
-      // RF07: Efeito de Tremor (Screenshake) ao sofrer dano
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true })
+        Animated.timing(shakeAnim, { toValue: 15, duration: 40, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -15, duration: 40, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 40, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 40, useNativeDriver: true })
       ]).start();
-
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
   }, [gameState?.boss_hp]);
 
-  // Limpa os mini-games quando o incidente some
   useEffect(() => {
-    if (!gameState?.active_incident) {
+    if (gameState?.squad_hp !== undefined && gameState?.max_squad_hp !== undefined) {
+      const squadHpPercent = Math.max(0, gameState.squad_hp / gameState.max_squad_hp);
+      Animated.timing(animatedSquadHP, { toValue: squadHpPercent, duration: 300, useNativeDriver: false }).start();
+    }
+  }, [gameState?.squad_hp]);
+
+  // --- CORREÇÃO: EFEITO 1 (Apenas roda o timer e a animação) ---
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+    
+    if (activeIncident && !isMyIncident) {
+      setSquadTimeLeft(5);
+      squadProgressAnim.setValue(0);
+
+      Animated.timing(squadProgressAnim, {
+        toValue: 1,
+        duration: 5000,
+        useNativeDriver: false
+      }).start();
+
+      timer = setInterval(() => {
+        setSquadTimeLeft((prev) => prev - 1);
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeIncident, isMyIncident]);
+
+  // --- CORREÇÃO: EFEITO 2 (Apenas dispara a resolução quando o timer zera) ---
+  useEffect(() => {
+    if (activeIncident && !isMyIncident && squadTimeLeft <= 0) {
+      resolveIncident("SQUAD_AUTO_FIX");
+    }
+  }, [squadTimeLeft, activeIncident, isMyIncident, resolveIncident]);
+
+  useEffect(() => {
+    if (!activeIncident) {
       setClicks(0);
       setSequence([]);
       setPuzzleAnswer('');
     }
-  }, [gameState?.active_incident]);
+  }, [activeIncident]);
 
   if (!gameState) {
     return (
       <View style={styles.loading}>
-        <Text style={styles.loadingText}>Conectando à Masmorra...</Text>
+        <Text style={styles.loadingText}>INICIALIZANDO ENGINE...</Text>
       </View>
     );
   }
 
-  const activeIncident = gameState.active_incident;
-  const isMyIncident = activeIncident?.target_class === player.class;
-
-  // --- FÁBRICA DE COMPONENTES DE INCIDENTE (RF05) ---
   const renderIncidentAction = () => {
     if (!activeIncident || !isMyIncident) return null;
 
@@ -84,7 +117,7 @@ export default function ArenaScreen() {
             if (newCount >= targetClicks) resolveIncident(newCount.toString());
           }}
         >
-          <Text style={styles.actionButtonText}>CLIQUE RÁPIDO ({clickCount}/{targetClicks})</Text>
+          <Text style={styles.actionButtonText}>REFORÇAR CÓDIGO ({clickCount}/{targetClicks})</Text>
         </TouchableOpacity>
       );
     }
@@ -94,22 +127,20 @@ export default function ArenaScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         const newSeq = [...sequence, num];
         setSequence(newSeq);
-        
-        // Se já digitou 3 números, valida a resposta
         if (newSeq.length === 3) {
           const answer = newSeq.join('-');
           if (answer === activeIncident.solution) {
             resolveIncident(answer);
           } else {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            setSequence([]); // Errou a senha, reseta!
+            setSequence([]);
           }
         }
       };
 
       return (
         <View style={styles.sequenceContainer}>
-          <Text style={styles.sequenceDisplay}>{sequence.join(' - ') || 'Digite a sequência'}</Text>
+          <Text style={styles.sequenceDisplay}>{sequence.join(' - ') || 'DIGITE O PATCH'}</Text>
           <View style={styles.sequenceRow}>
             {['1', '2', '3'].map(num => (
               <TouchableOpacity key={num} style={styles.seqButton} onPress={() => handleSeqPress(num)}>
@@ -126,14 +157,14 @@ export default function ArenaScreen() {
         <View style={styles.puzzleContainer}>
           <TextInput 
             style={styles.puzzleInput} 
-            placeholder="Digite o código da solução..."
-            placeholderTextColor="#888"
+            placeholder="Comando de correção..."
+            placeholderTextColor="#444"
             autoCapitalize="characters"
             value={puzzleAnswer}
             onChangeText={setPuzzleAnswer}
           />
           <TouchableOpacity style={styles.actionButton} onPress={() => resolveIncident(puzzleAnswer)}>
-            <Text style={styles.actionButtonText}>ENVIAR FIX</Text>
+            <Text style={styles.actionButtonText}>EXECUTAR HOTFIX</Text>
           </TouchableOpacity>
         </View>
       );
@@ -143,99 +174,157 @@ export default function ArenaScreen() {
   return (
     <View style={[styles.container, activeIncident && styles.incidentBg]}>
       
-      {/* RF08: Indicador de Conexão */}
       <View style={styles.topBar}>
-        <Text style={styles.roomTag}>SALA: {player.room}</Text>
+        <View>
+          <Text style={styles.roomTag}>SALA: {player.room}</Text>
+          <Text style={styles.latencyTag}>LATÊNCIA: 12ms</Text>
+        </View>
         <View style={[styles.statusDot, { backgroundColor: isConnected ? '#00ff66' : '#ff0033' }]} />
       </View>
 
-      {/* BOSS CONTAINER COM ANIMATION */}
-      <Animated.View style={[styles.bossContainer, { transform: [{ translateX: shakeAnim }] }]}>
-        <Text style={styles.bossName}>{gameState.current_boss?.name}</Text>
-        <Text style={styles.bossClass}>{gameState.current_boss?.class.toUpperCase()}</Text>
-        
-        <View style={styles.hpBarBackground}>
-          <Animated.View 
-            style={[styles.hpBarFill, { 
-              width: animatedHP.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) 
-            }]} 
-          />
+      <Animated.View style={[styles.bossSection, { transform: [{ translateX: shakeAnim }] }]}>
+        <View style={styles.bossFrame}>
+          <Image source={gameState.current_boss?.image} style={styles.bossImage} />
+          <View style={styles.bossOverlay} />
         </View>
-        <Text style={styles.hpText}>{gameState.boss_hp} / {gameState.current_boss?.max_hp} HP</Text>
+
+        <View style={styles.bossInfo}>
+          <Text style={styles.bossName}>{gameState.current_boss?.name}</Text>
+          <Text style={styles.bossStatus}>"{gameState.current_boss?.status_msg}"</Text>
+          
+          <View style={styles.hpBarContainer}>
+            <View style={styles.hpBarBackground}>
+              <Animated.View 
+                style={[styles.hpBarFill, { 
+                  width: animatedHP.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) 
+                }]} 
+              />
+            </View>
+            <Text style={styles.hpText}>HP: {gameState.boss_hp} / {gameState.current_boss?.max_hp}</Text>
+          </View>
+        </View>
       </Animated.View>
 
-      {/* FEED E INCIDENTES */}
       <View style={styles.middleSection}>
         {activeIncident ? (
           <View style={[styles.incidentCard, isMyIncident ? styles.myIncidentCard : styles.otherIncidentCard]}>
-            <Text style={styles.incidentTitle}>⚠️ {activeIncident.title}</Text>
+            <View style={styles.incidentHeader}>
+              <Text style={styles.incidentTitle}>{activeIncident.title}</Text>
+              <View style={styles.badge}><Text style={styles.badgeText}>{activeIncident.target_class}</Text></View>
+            </View>
             <Text style={styles.incidentDesc}>{activeIncident.description}</Text>
+            
             {renderIncidentAction()}
-            {!isMyIncident && <Text style={styles.waitingText}>Aguardando {activeIncident.target_class} resolver...</Text>}
+
+            {!isMyIncident && (
+              <View style={styles.waitingContainer}>
+                <Text style={styles.waitingText}>
+                  {squadTimeLeft > 0 ? `SQUAD RESOLVENDO EM ${squadTimeLeft}s...` : 'FINALIZANDO PATCH...'}
+                </Text>
+                <View style={styles.squadProgressBg}>
+                    <Animated.View 
+                        style={[styles.squadProgressFill, { 
+                            width: squadProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) 
+                        }]} 
+                    />
+                </View>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.feedCard}>
-            <Text style={styles.feedTitle}>ÚLTIMA AÇÃO</Text>
-            <Text style={styles.lastActionText}>{gameState.last_action}</Text>
+            <Text style={styles.feedTitle}>CONSOLE DOS LOGS</Text>
+            <Text style={styles.lastActionText}>{'>'} {gameState.last_action}</Text>
           </View>
         )}
       </View>
 
-      {/* BOTÃO PRINCIPAL */}
-      <TouchableOpacity 
-        style={[styles.attackButton, activeIncident && styles.attackDisabled]} 
-        onPress={() => {
-          if (!activeIncident) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            attack();
-          }
-        }}
-        activeOpacity={activeIncident ? 1 : 0.7}
-      >
-        <Text style={styles.attackText}>ATACAR</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.playerTag}>{player.nickname} | {player.class}</Text>
+      <View style={styles.footer}>
+        <TouchableOpacity 
+          style={[styles.attackButton, activeIncident && styles.attackDisabled]} 
+          onPress={() => !activeIncident && attack()}
+          activeOpacity={0.8}
+        >
+          <View style={styles.attackInner}>
+            <Text style={styles.attackText}>ATACAR</Text>
+          </View>
+        </TouchableOpacity>
+        
+        <View style={styles.playerInfo}>
+          <Text style={styles.playerNick}>{player.nickname} | {player.class.toUpperCase()}</Text>
+          
+          <View style={styles.squadHealthContainer}>
+            <Text style={styles.squadHealthText}>INTEGRIDADE DO SQUAD</Text>
+            <View style={styles.squadHpBarBg}>
+              <Animated.View 
+                style={[styles.squadHpBarFill, { 
+                  width: animatedSquadHP.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) 
+                }]} 
+              />
+            </View>
+            <Text style={styles.squadHpValues}>{gameState.squad_hp} / {gameState.max_squad_hp}</Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
 
-// ... Estilos na próxima resposta se precisar, mas a estrutura lógica é o foco aqui ...
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505', padding: 20, justifyContent: 'space-between' },
-  incidentBg: { backgroundColor: '#1a0505' },
+  container: { flex: 1, backgroundColor: '#050505', padding: 20 },
+  incidentBg: { backgroundColor: '#0f0505' },
   loading: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#00ff66', fontSize: 16, fontFamily: 'monospace' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40 },
-  roomTag: { color: '#666', fontWeight: 'bold', fontSize: 12 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  bossContainer: { alignItems: 'center', marginTop: 20 },
-  bossName: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 1 },
-  bossClass: { color: '#ff0033', fontSize: 14, fontWeight: 'bold', marginBottom: 15, letterSpacing: 3 },
-  hpBarBackground: { width: '100%', height: 25, backgroundColor: '#222', borderRadius: 12, borderWidth: 2, borderColor: '#111', overflow: 'hidden' },
+  loadingText: { color: '#00ff66', fontSize: 14, fontFamily: 'monospace', letterSpacing: 2 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 40 },
+  roomTag: { color: '#444', fontWeight: 'bold', fontSize: 10 },
+  latencyTag: { color: '#00ff66', fontSize: 10, fontFamily: 'monospace' },
+  statusDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
+  bossSection: { alignItems: 'center', marginTop: 10 },
+  bossFrame: { width: 200, height: 200, borderRadius: 100, borderWidth: 4, borderColor: '#ff0033', overflow: 'hidden', backgroundColor: '#111' },
+  bossImage: { width: '100%', height: '100%' },
+  bossOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,0,0,0.1)' },
+  bossInfo: { width: '100%', alignItems: 'center', marginTop: 15 },
+  bossName: { color: '#fff', fontSize: 26, fontWeight: '900' },
+  bossStatus: { color: '#00ff66', fontSize: 12, fontStyle: 'italic', marginBottom: 15 },
+  hpBarContainer: { width: '100%', alignItems: 'center' },
+  hpBarBackground: { width: '90%', height: 18, backgroundColor: '#111', borderRadius: 9, borderWidth: 1, borderColor: '#333', overflow: 'hidden' },
   hpBarFill: { height: '100%', backgroundColor: '#ff0033' },
-  hpText: { color: '#aaa', marginTop: 10, fontWeight: 'bold', fontSize: 12 },
+  hpText: { color: '#666', marginTop: 5, fontWeight: 'bold', fontSize: 10 },
   middleSection: { flex: 1, justifyContent: 'center', marginVertical: 20 },
-  feedCard: { backgroundColor: '#111', padding: 20, borderRadius: 15, borderLeftWidth: 4, borderLeftColor: '#00ff66' },
-  feedTitle: { color: '#555', fontSize: 10, fontWeight: 'bold', marginBottom: 5 },
-  lastActionText: { color: '#00ff66', fontSize: 16, fontFamily: 'monospace' },
-  incidentCard: { padding: 20, borderRadius: 15, borderWidth: 2 },
-  myIncidentCard: { backgroundColor: '#0a1a0a', borderColor: '#00ff66' },
-  otherIncidentCard: { backgroundColor: '#1a0a0a', borderColor: '#ff0033' },
-  incidentTitle: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  incidentDesc: { color: '#ccc', marginVertical: 10, fontSize: 14 },
-  waitingText: { color: '#ff0033', fontStyle: 'italic', marginTop: 10 },
-  actionButton: { backgroundColor: '#00ff66', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-  actionButtonText: { color: '#000', fontWeight: '900', fontSize: 16 },
-  sequenceContainer: { marginTop: 15, alignItems: 'center' },
-  sequenceDisplay: { color: '#00ff66', fontSize: 24, fontWeight: 'bold', letterSpacing: 5, marginBottom: 15 },
-  sequenceRow: { flexDirection: 'row', gap: 15 },
-  seqButton: { backgroundColor: '#222', width: 60, height: 60, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#00ff66' },
-  seqButtonText: { color: '#00ff66', fontSize: 24, fontWeight: 'bold' },
+  feedCard: { backgroundColor: '#0a0a0a', padding: 15, borderRadius: 12, borderLeftWidth: 3, borderLeftColor: '#00ff66' },
+  feedTitle: { color: '#333', fontSize: 10, fontWeight: 'bold', marginBottom: 8 },
+  lastActionText: { color: '#00ff66', fontSize: 14, fontFamily: 'monospace' },
+  incidentCard: { padding: 20, borderRadius: 15, borderWidth: 1 },
+  myIncidentCard: { backgroundColor: '#0a150a', borderColor: '#00ff66' },
+  otherIncidentCard: { backgroundColor: '#150a0a', borderColor: '#ff0033', opacity: 0.8 },
+  incidentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  incidentTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  badge: { backgroundColor: '#333', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  incidentDesc: { color: '#aaa', marginVertical: 12, fontSize: 13 },
+  waitingContainer: { marginTop: 15, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#300', paddingTop: 10 },
+  waitingText: { color: '#ff0033', fontSize: 10, fontWeight: 'bold', marginBottom: 10 },
+  squadProgressBg: { width: '100%', height: 6, backgroundColor: '#200', borderRadius: 3, overflow: 'hidden' },
+  squadProgressFill: { height: '100%', backgroundColor: '#00ff66' },
+  actionButton: { backgroundColor: '#00ff66', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  actionButtonText: { color: '#000', fontWeight: '900', fontSize: 14 },
+  sequenceContainer: { marginTop: 10, alignItems: 'center' },
+  sequenceDisplay: { color: '#00ff66', fontSize: 20, fontWeight: 'bold', marginBottom: 15 },
+  sequenceRow: { flexDirection: 'row', gap: 12 },
+  seqButton: { backgroundColor: '#111', width: 55, height: 55, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#00ff66' },
+  seqButtonText: { color: '#00ff66', fontSize: 20, fontWeight: 'bold' },
   puzzleContainer: { marginTop: 10 },
-  puzzleInput: { backgroundColor: '#000', borderWidth: 1, borderColor: '#00ff66', color: '#00ff66', padding: 15, borderRadius: 10, fontSize: 16, fontFamily: 'monospace' },
-  attackButton: { backgroundColor: '#ff0033', height: 110, width: 110, borderRadius: 55, alignSelf: 'center', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: '#ff0033', shadowOpacity: 0.8, shadowRadius: 15 },
-  attackDisabled: { backgroundColor: '#222', shadowOpacity: 0 },
-  attackText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  playerTag: { color: '#555', textAlign: 'center', fontSize: 12, marginTop: 20, fontWeight: 'bold' }
+  puzzleInput: { backgroundColor: '#000', borderWidth: 1, borderColor: '#00ff66', color: '#00ff66', padding: 15, borderRadius: 8 },
+  footer: { alignItems: 'center', marginBottom: 20 },
+  attackButton: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#ff0033', padding: 4 },
+  attackInner: { flex: 1, borderRadius: 46, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  attackDisabled: { backgroundColor: '#222' },
+  attackText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  playerInfo: { marginTop: 20, alignItems: 'center', width: '100%' },
+  playerNick: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginBottom: 15 },
+  squadHealthContainer: { width: '80%', alignItems: 'center', backgroundColor: '#0a0a0a', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#222' },
+  squadHealthText: { color: '#00ff66', fontSize: 9, fontWeight: 'bold', letterSpacing: 1, marginBottom: 5 },
+  squadHpBarBg: { width: '100%', height: 10, backgroundColor: '#222', borderRadius: 5, overflow: 'hidden' },
+  squadHpBarFill: { height: '100%', backgroundColor: '#00ff66' },
+  squadHpValues: { color: '#666', fontSize: 10, fontWeight: 'bold', marginTop: 4, fontFamily: 'monospace' }
 });
