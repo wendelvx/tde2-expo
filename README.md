@@ -1,50 +1,50 @@
-# Welcome to your Expo app 👋
+# 🛡️ Dungeon Master - TDE 2 (Mobile)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Protótipo funcional desenvolvido em **React Native (Expo)** para a disciplina de Projeto Integrador do curso de ADS e SI do **Centro Universitário Paraíso (UNIFAP)**.
 
-## Get started
+O **Dungeon Master** é uma plataforma gamificada de treinamento técnico e simulação de ambientes críticos. O aplicativo permite que os usuários participem de batalhas colaborativas massivas, onde problemas reais de infraestrutura e desenvolvimento são transpostos para mecânicas de RPG.
 
-1. Install dependencies
+## 👥 Integrantes da Equipe
+| Nome | Matrícula |
+| :--- | :--- |
+| **Rafaele Ferreira Pinto** | 20241130047 |
+| **Paulo Wendel Alves Peixoto** | 20241130052 |
+| **Douglas Rocha** | 2022113055 |
+| **Richard Ferreira Oliveira Cunha** | 20232180027 |
+| **Nilza Kelly Campos Fernandes** | 20241180157 |
+| **Vinicius Sarmento Ramos** | 20241180174 |
+| **Mateus José Rosado Ferreira** | 20241130072 |
+| **Isaac Oliveira Menezes** | 20241180182 |
+| **Vanessa Carine Alves Silva** | 20241130071 |
 
+## ⚙️ Arquitetura e Simulação (Dados Mockados)
+Este projeto foi originalmente arquitetado para operar com WebSockets e eventos em tempo real. Para a entrega da **TDE 2**, a aplicação foi refatorada para utilizar **Dados Mockados** (`src/constants/gameMocks.ts`), garantindo a demonstração completa da experiência do usuário sem dependência de infraestrutura externa.
+
+### 🎮 Mecânicas Implementadas na Simulação:
+- **Squad HP & Condição de Derrota:** A equipe possui uma barra de integridade (2000 HP). Se o Boss causar dano crítico e a vida chegar a zero, o Squad é derrotado.
+- **Bloqueio Operacional:** Durante incidentes ativos, o dano automático do Squad é interrompido, simulando o travamento da equipe frente a bugs críticos.
+- **Resolução de Squad:** Incidentes de outras classes são resolvidos automaticamente após 5 segundos, permitindo visualizar a progressão do time.
+- **Chefes Reais:** Os Bosses utilizam fotos reais do corpo docente da UNIFAP, transformando a experiência acadêmica em um desafio de RPG.
+
+## 🚀 Como Executar o Projeto
+
+1. **Instalar dependências:**
    ```bash
    npm install
-   ```
+Iniciar o servidor Expo:
 
-2. Start the app
+Bash
+npx expo start
+Visualizar:
+Escaneie o QR Code exibido no terminal utilizando o aplicativo Expo Go (disponível para Android e iOS).
 
-   ```bash
-   npx expo start
-   ```
+🛠️ Tecnologias Utilizadas
+React Native (Expo Router)
 
-In the output, you'll find options to open the app in a
+Context API (Engine de jogo e gerenciamento de estado)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Expo Haptics (Feedback físico por vibração)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+TypeScript (Segurança e tipagem do sistema)
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Repositório: https://github.com/wendelvx/tde2-expo
